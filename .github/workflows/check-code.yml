@@ -1,0 +1,99 @@
+name: Check Code
+
+on:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - '**/testdata/**'
+      - '.gitattributes'
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - 'go.*'
+      - 'vendor/**'
+  push:
+    branches: [main, next]
+    paths:
+      - '**/*.go'
+      - '**/testdata/**'
+      - '.gitattributes'
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - 'go.*'
+      - 'vendor/**'
+  schedule:
+    - cron: '0 8 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  lint:
+    name: Static checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Setup GoLang
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+      - name: Verify Modules
+        run: go mod verify
+      - name: Verify Module Metadata
+        run: go mod tidy -diff
+      - name: Vet Analysis
+        run: go vet ./...
+      - name: Vulnerability Analysis
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+
+  sca:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Setup GoLang
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        if: matrix.language == 'go'
+        with:
+          go-version-file: go.mod
+      - name: Setup CodeQL
+        uses: github/codeql-action/init@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          tools: linked
+      - name: Build for Analysis
+        if: matrix.language == 'go'
+        run: go build ./...
+      - name: Perform Analysis
+        uses: github/codeql-action/analyze@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
+        with:
+          category: /language:${{ matrix.language }}

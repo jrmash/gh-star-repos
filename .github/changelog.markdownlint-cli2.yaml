@@ -1,0 +1,8 @@
+gitignore: true
+config:
+  MD013: false
+  # Match Release Please's generated spacing and section headings.
+  MD012:
+    maximum: 2
+  MD024:
+    siblings_only: true

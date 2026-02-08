@@ -1,0 +1,60 @@
+name: Check Markdown
+
+on:
+  pull_request:
+    paths:
+      - '**/*.markdown'
+      - '**/*.md'
+      - '.github/workflows/**'
+      - '.github/*.markdownlint-cli2.yaml'
+      - '.gitignore'
+      - '.markdownlint*'
+      - '.release-please-config*.json'
+      - 'lychee.toml'
+  push:
+    branches: [main, next]
+    paths:
+      - '**/*.markdown'
+      - '**/*.md'
+      - '.github/workflows/**'
+      - '.github/*.markdownlint-cli2.yaml'
+      - '.gitignore'
+      - '.markdownlint*'
+      - '.release-please-config*.json'
+      - 'lychee.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  markdown:
+    name: Markdown
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Check Links
+        uses: lycheeverse/lychee-action@a8c4c7cb88f0c7386610c35eb25108e448569cb0 # v2.7.0
+        with:
+          args: --no-progress '**/*.md'
+          lycheeVersion: v0.21.0
+          output: ${{ runner.temp }}/lychee-report.md
+      - name: Lint Files
+        uses: DavidAnson/markdownlint-cli2-action@07035fd053f7be764496c0f8d8f9f41f98305101 # v22.0.0
+        with:
+          globs: |
+            **/*.{md,markdown}
+            !CHANGELOG.md
+      - name: Lint Changelog
+        if: hashFiles('CHANGELOG.md') != ''
+        uses: DavidAnson/markdownlint-cli2-action@07035fd053f7be764496c0f8d8f9f41f98305101 # v22.0.0
+        with:
+          config: .github/changelog.markdownlint-cli2.yaml
+          globs: CHANGELOG.md

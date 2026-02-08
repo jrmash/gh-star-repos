@@ -1,0 +1,87 @@
+name: Build and Test
+
+on:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - '**/testdata/**'
+      - '.gitattributes'
+      - '.github/workflows/build-test.yml'
+      - 'go.*'
+      - 'scripts/**'
+      - 'vendor/**'
+  push:
+    branches: [main, next]
+    paths:
+      - '**/*.go'
+      - '**/testdata/**'
+      - '.gitattributes'
+      - '.github/workflows/build-test.yml'
+      - 'go.*'
+      - 'scripts/**'
+      - 'vendor/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  checks:
+    name: Build and Test (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: ${{ matrix.race && '1' || '0' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, goos: darwin, goarch: arm64, race: true }
+          - { os: macos-15-intel, goos: darwin, goarch: amd64, race: true }
+          - { os: ubuntu-24.04, goos: linux, goarch: amd64, race: true }
+          - { os: ubuntu-24.04-arm, goos: linux, goarch: arm64, race: true }
+          - { os: windows-11-arm, goos: windows, goarch: arm64, race: false }
+          - { os: windows-2025, goos: windows, goarch: amd64, race: true }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: '3.14.2'
+      - name: Setup GitHub CLI
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/install-gh.py ${{ matrix.goos }} ${{ matrix.goarch }}
+      - name: Build
+        run: go build ./...
+      - name: Test with Coverage
+        if: ${{ !matrix.race }}
+        # Quote dotted flag values so PowerShell passes each argument intact.
+        run: go test -covermode=atomic '-coverpkg=./...' '-coverprofile=coverage.out' ./...
+      - name: Test with Coverage and Race Detection
+        if: matrix.race
+        run: go test -race -covermode=atomic '-coverpkg=./...' '-coverprofile=coverage.out' ./...
+      - name: Upload Coverage
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: coverage-${{ matrix.goos }}-${{ matrix.goarch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage.out
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Verify 90% Coverage
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/check.py coverage coverage.out 90
+      - name: Verify Extension
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHSR_SMOKE_GOOS: ${{ matrix.goos }}
+          GHSR_SMOKE_GOARCH: ${{ matrix.goarch }}
+        run: go test -tags smoke -count=1 -v -timeout=15m ./integration
