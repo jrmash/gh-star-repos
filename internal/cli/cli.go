@@ -21,8 +21,7 @@ import (
 	"github.com/jrmash/gh-star-repos/internal/stars"
 )
 
-// Options substitutes external commands and process state in tests, as in
-// gh-get-repos. No real account access is required to exercise the entire CLI.
+// Options allows commands, time, and process state to be substituted in tests.
 type Options struct {
 	Version          string
 	Out, Err         io.Writer
@@ -127,17 +126,20 @@ func newCommand(o Options) *cobra.Command {
 	flags := cmd.PersistentFlags()
 	flags.StringP("archived", "a", "any", "Archived repositories: any|exclude|only")
 	flags.String("forks", "exclude", "Forked repositories: any|exclude|only")
-	flags.StringP("visibility", "v", "any", "Repository visibility: any|public|private|internal")
-	flags.StringP("language", "l", "", "Primary language (case insensitive)")
-	flags.StringSliceP("topic", "t", nil, "Required topics (CSV or repeat; all must match)")
+	flags.String("format", "human", "Output format: human|json|yaml")
+	flags.StringP("visibility", "v", "any", "Repository visibility: any|internal|private|public")
+	flags.StringP("language", "l", "", "Primary language name (case insensitive; default: no filter)")
+	flags.StringSliceP("topic", "t", nil, "Required topics (CSV or repeat; all must match; default: no filter)")
 	flags.StringArray("exclude", nil, "Repository-name glob to exclude (repeatable, case insensitive)")
 	flags.StringArray("list", nil, "Exact name of one of your star lists (repeatable)")
 	flags.Bool("create-lists", false, "Create missing requested lists before starring")
 	flags.String("list-visibility", "private", "Visibility of new lists: private|public")
-	flags.IntP("sleep", "s", 1, "Seconds between mutation attempts (0 disables pacing)")
+	flags.IntP("sleep", "s", 1, "Seconds between mutation attempts: 0–300 (0 disables pacing)")
 	flags.IntP("max-repos", "m", 0, "Maximum repositories needing changes (0 means unlimited)")
 	flags.Bool("dry-run", false, "Preview stars and list changes without mutations")
-	flags.String("format", "human", "Output format: human|json|yaml")
+	flags.SortFlags = false
+	cmd.Flags().SortFlags = false
+	cmd.Flags().AddFlagSet(flags)
 	cmd.Flags().BoolP("help", "h", false, "Show help")
 	cmd.Flags().Bool("version", false, "Show extension version")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {

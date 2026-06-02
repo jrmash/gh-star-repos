@@ -23,7 +23,7 @@ gh extension install jrmash/gh-star-repos
 gh star-repos --help
 ```
 
-Remote installation requires a published binary release. During development, build locally with Go 1.25.6 or newer:
+Remote installation requires a published binary release. During development, build locally with Go 1.26.3 or newer:
 
 ```sh
 git clone https://github.com/jrmash/gh-star-repos.git
@@ -58,7 +58,7 @@ Owner may be a user or organization. If omitted, configuration applies, then the
 | `--list` | Repeated exact list names | No assignments |
 | `--create-lists` | Boolean | `false` |
 | `--list-visibility` | New lists: `private`, `public` | `private` |
-| `--sleep`, `-s` | Nonnegative integer seconds between mutations | `1` |
+| `--sleep`, `-s` | Integer seconds between mutations, from 0 to 300 | `1` |
 | `--max-repos`, `-m` | Nonnegative integer; `0` means unlimited | `0` |
 | `--dry-run` | Boolean | `false` |
 | `--format` | `human`, `json`, `yaml` | `human` |
@@ -191,8 +191,10 @@ go build .
 
 Unit tests use a stateful fake API, injected commands, and fake clocks. They need no credentials and do not change real stars. The optional installed-extension smoke test (`go test -tags smoke ./integration`) uses GitHub CLI authentication for read-only API calls. CI runs on Linux, macOS, and Windows.
 
-```sh
-python3 scripts/build-release.py v1.0.0
-```
+The Release PR workflow prepares releases from `main`. Merging its release PR creates a draft release. The GitHub CLI extension precompile action builds, uploads, and attests the binaries; the workflow then publishes the release.
 
-This builds six release binaries and SHA-256 checksums under `dist/` without publishing. The Release PR workflow prepares stable releases from `main` and release candidates from `next`. Merging its release PR creates a draft release, builds and attests macOS/Linux/Windows binaries for amd64/arm64, uploads the assets, and publishes the release.
+See [Contributing](CONTRIBUTING.md) for local checks, installation smoke tests, and release requirements. See [Security](SECURITY.md) for vulnerability reporting and repository security settings.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

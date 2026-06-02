@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestRunnerHelper(t *testing.T) {
 	if len(args) < 2 {
 		os.Exit(90)
 	}
-	if os.Getenv("GH_PROMPT_DISABLED") != "1" || os.Getenv("GH_FORCE_TTY") != "" {
+	if os.Getenv("GH_PROMPT_DISABLED") != "1" || os.Getenv("GH_FORCE_TTY") != "" || os.Getenv("GIT_TERMINAL_PROMPT") != "0" || os.Getenv("GIT_DIR") != "" {
 		os.Exit(91)
 	}
 	switch args[1] {
@@ -49,14 +50,20 @@ func TestProcessRunnerPreservesArgumentsAndErrorOutput(t *testing.T) {
 	t.Setenv("GH_PATH", binary)
 	t.Setenv("GHSR_TEST_HELPER", "1")
 	t.Setenv("GH_FORCE_TTY", "1")
+	t.Setenv("GIT_DIR", "unrelated-repository")
+	t.Setenv("GIT_TERMINAL_PROMPT", "1")
 	args := []string{"-test.run=TestRunnerHelper", "--", "success", "space in name", "$(literal)", "`literal`", "--query=value"}
 	output, err := (ProcessRunner{}).Run(context.Background(), "gh", args...)
 	if err != nil || output != "space in name|$(literal)|`literal`|--query=value" {
 		t.Fatalf("arguments were changed or evaluated: %q %v", output, err)
 	}
 	output, err = (ProcessRunner{}).Run(context.Background(), "gh", "-test.run=TestRunnerHelper", "--", "failure")
-	if output != "partial response" || err == nil || !strings.Contains(err.Error(), "permission denied") {
+	if output != "partial response" || err == nil || err.Error() != "gh: permission denied" {
 		t.Fatalf("lost partial response/stderr: %q %v", output, err)
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+		t.Fatalf("lost process exit status: %v", err)
 	}
 }
 

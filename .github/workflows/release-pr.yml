@@ -2,23 +2,19 @@ name: Release PR
 
 on:
   push:
-    branches: [main, next]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
   cancel-in-progress: false
   group: release-${{ github.ref }}
-
 permissions:
   contents: read
-
-env:
-  GOTOOLCHAIN: local
 
 jobs:
   prepare:
     name: Prepare Release
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/next'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -31,14 +27,11 @@ jobs:
       sha: ${{ steps.release.outputs.sha }}
     steps:
       - name: Manage release PRs and draft releases
-        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           target-branch: ${{ github.ref_name }}
-          config-file: >-
-            ${{ github.ref_name == github.event.repository.default_branch
-                && '.release-please-config.json'
-                || '.release-please-config-prerelease.json' }}
+          config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -58,45 +51,16 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
-      - name: Setup GoLang
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: go.mod
-      - name: Setup Python
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: '3.14.2'
-      - name: Setup GitHub CLI
-        run: python3 scripts/install-gh.py linux amd64
-      - name: Ensure release tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
-        shell: bash
-        run: |
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" > /dev/null; then
-            actual_sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq .sha)
-            test "$actual_sha" = "$RELEASE_SHA"
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --raw-field "ref=refs/tags/${RELEASE_TAG}" --raw-field "sha=${RELEASE_SHA}" > /dev/null
-          fi
       - name: Compile Extension
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-        run: python3 scripts/build-release.py "$RELEASE_TAG"
-      - name: Attest Release Binaries
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: cli/gh-extension-precompile@1c8ed8f565dbeddb705dad995a4f75ceb815c0f9
         with:
-          subject-path: '${{ github.workspace }}/dist/*'
-      - name: Upload Release Binaries
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-        run: gh release upload "$RELEASE_TAG" --clobber -- dist/*
+          release_tag: ${{ needs.prepare.outputs.tag }}
+          draft_release: true
+          generate_attestations: true
+          go_build_options: '-ldflags=-X=main.version=${{ needs.prepare.outputs.tag }}'
+          go_version_file: go.mod
       - name: Publish Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_LATEST: ${{ github.ref_name == github.event.repository.default_branch }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-        run: gh release edit "$RELEASE_TAG" --draft=false --latest="$RELEASE_LATEST"
+        run: gh release edit "$RELEASE_TAG" --verify-tag --draft=false --latest

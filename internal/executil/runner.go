@@ -21,6 +21,15 @@ type Runner interface {
 
 type ProcessRunner struct{}
 
+type commandError struct {
+	name    string
+	message string
+	cause   error
+}
+
+func (e *commandError) Error() string { return e.name + ": " + e.message }
+func (e *commandError) Unwrap() error { return e.cause }
+
 func (ProcessRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -48,20 +57,22 @@ func (ProcessRunner) Run(ctx context.Context, name string, args ...string) (stri
 		if message == "" {
 			message = err.Error()
 		}
-		return stdout.String(), fmt.Errorf("%s: %s: %w", name, message, err)
+		return stdout.String(), &commandError{name: name, message: message, cause: err}
 	}
 	return stdout.String(), nil
 }
 
 func commandEnv(env []string) []string {
-	result := make([]string, 0, len(env)+3)
+	result := make([]string, 0, len(env)+4)
 	for _, entry := range env {
 		key, _, _ := strings.Cut(entry, "=")
 		switch strings.ToUpper(key) {
 		case "GH_PROMPT_DISABLED", "GH_FORCE_TTY", "GH_PAGER", "PAGER", "CLICOLOR_FORCE":
 			continue
+		case "GIT_TERMINAL_PROMPT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR":
+			continue
 		}
 		result = append(result, entry)
 	}
-	return append(result, "GH_PROMPT_DISABLED=1", "GH_PAGER=cat", "CLICOLOR_FORCE=0")
+	return append(result, "GH_PROMPT_DISABLED=1", "GIT_TERMINAL_PROMPT=0", "GH_PAGER=cat", "CLICOLOR_FORCE=0")
 }

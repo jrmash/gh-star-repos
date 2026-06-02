@@ -42,7 +42,7 @@ func TestDefaults(t *testing.T) {
 	if cfg.Owner != "" || cfg.Archived != "any" || cfg.Forks != "exclude" || cfg.Visibility != "any" || cfg.Sleep != 1 || cfg.ListVisibility != "private" || cfg.Format != "human" || cfg.CreateLists || cfg.DryRun {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
-	if cfg.Topics == nil || cfg.Exclude == nil || cfg.Lists == nil || len(cfg.Sources) != len(keys) {
+	if cfg.Topics == nil || cfg.Exclude == nil || cfg.Lists == nil || len(cfg.Sources) != len(names) {
 		t.Fatalf("missing arrays or source metadata: %+v", cfg)
 	}
 }
@@ -77,10 +77,10 @@ func TestEnvironmentForEverySetting(t *testing.T) {
 		"language": "Go", "topic": "cli,tools", "exclude": "test-*,*-old", "list": "Go,Tools",
 		"create-lists": "true", "list-visibility": "public", "sleep": "0", "max-repos": "12", "dry-run": "true", "format": "yaml",
 	}
-	for _, key := range keys {
+	for _, key := range names {
 		t.Run(key, func(t *testing.T) {
 			cwd, env := fixture(t)
-			names := environmentNames(key)
+			names := environmentNames[key]
 			for _, name := range names {
 				env[name] = values[key]
 				cfg, err := Load(cwd, lookup(env), nil)
@@ -173,5 +173,79 @@ func TestCSVAndClearing(t *testing.T) {
 	cfg, err := Load(cwd, lookup(env), map[string]string{"topic": "", "exclude": "", "list": ""})
 	if err != nil || len(cfg.Topics)+len(cfg.Exclude)+len(cfg.Lists) != 0 {
 		t.Fatalf("sequences did not clear: %+v %v", cfg, err)
+	}
+}
+
+func TestGlobalConfigurationPaths(t *testing.T) {
+	for _, tc := range []struct{ variable, directory, relative string }{
+		{"GH_CONFIG_DIR", "relative-config", "relative-config"},
+		{"GH_CONFIG_DIR", "~/config", "config"},
+		{"XDG_CONFIG_HOME", "relative-config", "relative-config/gh"},
+		{"XDG_CONFIG_HOME", "~/config", "config/gh"},
+	} {
+		t.Run(tc.variable+"/"+tc.directory, func(t *testing.T) {
+			cwd, env := fixture(t)
+			delete(env, "GH_CONFIG_DIR")
+			env[tc.variable] = tc.directory
+			base := cwd
+			if strings.HasPrefix(tc.directory, "~") {
+				base = env["HOME"]
+			}
+			dir := filepath.Join(base, filepath.FromSlash(tc.relative))
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			filename := filepath.Join(dir, "star-repos.yml")
+			write(t, filename, "owner: configured\n")
+			cfg, err := Load(cwd, lookup(env), nil)
+			if err != nil || cfg.Owner != "configured" || cfg.Sources["owner"] != filename {
+				t.Fatalf("global path resolution: %+v, %v", cfg, err)
+			}
+		})
+	}
+	for _, invalid := range []string{"~another/config", "bad\x00path"} {
+		cwd, env := fixture(t)
+		env["GH_CONFIG_DIR"] = invalid
+		if _, err := Load(cwd, lookup(env), nil); err == nil || !strings.Contains(err.Error(), "global configuration directory") {
+			t.Fatalf("invalid configuration path %q: %v", invalid, err)
+		}
+	}
+}
+
+func TestYAMLAliasesAndBooleans(t *testing.T) {
+	cwd, env := fixture(t)
+	write(t, filepath.Join(cwd, ".gh-star-repos.yml"), "topic: &topics [cli, tools]\nlist: *topics\ncreate-lists: &enabled TRUE\ndry-run: *enabled\nsleep: &limit 2\nmax-repos: *limit\n")
+	cfg, err := Load(cwd, lookup(env), nil)
+	if err != nil || !cfg.DryRun || !cfg.CreateLists || cfg.Sleep != 2 || cfg.MaxRepos != 2 || !reflect.DeepEqual(cfg.Lists, []string{"cli", "tools"}) {
+		t.Fatalf("YAML aliases or boolean case rejected: %+v, %v", cfg, err)
+	}
+}
+
+func TestSleepBoundariesAndSourcedErrors(t *testing.T) {
+	cwd, env := fixture(t)
+	if cfg, err := Load(cwd, lookup(env), map[string]string{"sleep": "300"}); err != nil || cfg.Sleep != 300 {
+		t.Fatalf("maximum sleep rejected: %+v, %v", cfg, err)
+	}
+	env["GHSR_SLEEP"], env["GHSR_OPT_SLEEP"] = "0", "301"
+	if _, err := Load(cwd, lookup(env), nil); err == nil || !strings.Contains(err.Error(), "GHSR_OPT_SLEEP: sleep must be an integer from 0 to 300") {
+		t.Fatalf("missing sourced range error: %v", err)
+	}
+	if cfg, err := Load(cwd, lookup(env), map[string]string{"sleep": "0"}); err != nil || cfg.Sleep != 0 {
+		t.Fatalf("CLI did not override invalid environment: %+v, %v", cfg, err)
+	}
+	delete(env, "GHSR_OPT_SLEEP")
+	env["GHSR_OPT_TOPIC"], env["GHSR_TOPIC"] = "", "alias"
+	if cfg, err := Load(cwd, lookup(env), nil); err != nil || len(cfg.Topics) != 0 || cfg.Sources["topic"] != "GHSR_OPT_TOPIC" {
+		t.Fatalf("empty canonical value did not clear alias: %+v, %v", cfg, err)
+	}
+}
+
+func TestUnknownOverridesHaveStableErrors(t *testing.T) {
+	cwd, env := fixture(t)
+	for range 20 {
+		_, err := Load(cwd, lookup(env), map[string]string{"z-unknown": "", "a-unknown": ""})
+		if err == nil || err.Error() != `unknown command line setting "a-unknown"` {
+			t.Fatalf("unstable unknown setting error: %v", err)
+		}
 	}
 }

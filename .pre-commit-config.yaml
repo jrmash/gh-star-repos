@@ -4,30 +4,17 @@ repos:
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
     hooks:
       - id: check-case-conflict
-        additional_dependencies: &python-hook-dependencies
-          - ruamel.yaml==0.19.1
-          - "tomli==2.4.0; python_version < '3.11'"
       - id: check-json
-        additional_dependencies: *python-hook-dependencies
       - id: check-merge-conflict
-        additional_dependencies: *python-hook-dependencies
       - id: check-symlinks
-        additional_dependencies: *python-hook-dependencies
       - id: check-yaml
-        additional_dependencies: *python-hook-dependencies
       - id: end-of-file-fixer
-        additional_dependencies: *python-hook-dependencies
       - id: fix-byte-order-marker
-        additional_dependencies: *python-hook-dependencies
       - id: forbid-new-submodules
-        additional_dependencies: *python-hook-dependencies
       - id: mixed-line-ending
-        additional_dependencies: *python-hook-dependencies
       - id: no-commit-to-branch
         args: [--branch, main]
-        additional_dependencies: *python-hook-dependencies
       - id: trailing-whitespace
-        additional_dependencies: *python-hook-dependencies
   - repo: https://github.com/TekWizely/pre-commit-golang
     rev: f298c082154b2cb239fac06a4f452368e66e66dd # v1.0.0-rc.4
     hooks:
