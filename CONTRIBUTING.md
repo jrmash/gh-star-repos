@@ -57,10 +57,10 @@ These tests require network access and use `GH_TOKEN`, `GITHUB_TOKEN`, or existi
 
 ## Security checks and dependency updates
 
-The [Check code workflow](.github/workflows/check-code.yml) runs module verification and tidy checks, vetting, and pinned `govulncheck` v1.3.0 on Linux, macOS, and Windows. It also runs CodeQL analysis for Go and GitHub Actions. These checks also run on the default branch every Saturday at 08:00 UTC.
+The [Check code workflow](.github/workflows/check-code.yml) runs module verification and tidy checks, vetting, and pinned `govulncheck` v1.9.0 on Linux, macOS, and Windows. It also runs CodeQL analysis for Go and GitHub Actions. These checks also run on the default branch every Saturday at 08:00 UTC.
 
 ```sh
-go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 govulncheck ./...
 ```
 
@@ -150,8 +150,8 @@ The required build/test checks are:
 
 The required code checks are:
 
-- `Static checks (ubuntu-24.04)`
-- `Static checks (macos-15)`
+- `Static checks (ubuntu-26.04)`
+- `Static checks (macos-26)`
 - `Static checks (windows-2025)`
 - `Analyze (go)`
 - `Analyze (actions)`

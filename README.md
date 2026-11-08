@@ -23,7 +23,7 @@ gh extension install jrmash/gh-star-repos
 gh star-repos --help
 ```
 
-Remote installation requires a published binary release. During development, build locally with Go 1.26.3 or newer:
+Remote installation requires a published binary release. During development, build locally with Go 1.27.3 or newer:
 
 ```sh
 git clone https://github.com/jrmash/gh-star-repos.git

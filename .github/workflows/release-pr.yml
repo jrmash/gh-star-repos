@@ -15,7 +15,7 @@ jobs:
   prepare:
     name: Prepare Release
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -39,7 +39,7 @@ jobs:
     name: Publish Release
     needs: prepare
     if: needs.prepare.outputs.release_created == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       attestations: write
@@ -47,17 +47,17 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
       - name: Compile Extension
-        uses: cli/gh-extension-precompile@1c8ed8f565dbeddb705dad995a4f75ceb815c0f9
+        uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
         with:
           release_tag: ${{ needs.prepare.outputs.tag }}
           draft_release: true
           generate_attestations: true
-          go_build_options: '-ldflags=-X=main.version=${{ needs.prepare.outputs.tag }}'
+          go_build_options: '-ldflags=-s -w -X main.version=${{ needs.prepare.outputs.tag }}'
           go_version_file: go.mod
       - name: Publish Release
         env:
