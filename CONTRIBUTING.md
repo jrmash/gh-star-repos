@@ -64,7 +64,16 @@ go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 govulncheck ./...
 ```
 
-Third-party Actions are pinned to full commit SHAs; readable version comments identify tagged releases. Dependabot checks modules and action pins weekly, groups compatible minor/patch updates, and leaves major updates separate. Update the scanner pin deliberately when changing the Go toolchain; tool versions embedded in shell commands are not automatically updated by the Go module ecosystem.
+Third-party Actions are pinned to full commit SHAs; readable version comments identify tagged releases. Dependabot checks modules and action pins weekly, groups compatible minor/patch updates, and leaves major updates separate. Dependabot does not upgrade the Go toolchain selected by `go.mod`, so standard-library vulnerabilities can fail `govulncheck` without a Dependabot PR. Tool versions embedded in shell commands are also outside Go module updates; retain the `govulncheck` v1.9.0 pin unless compatibility requires an update.
+
+Follow this procedure for security maintenance:
+
+1. Inspect the failed scan and classify the finding as a Go standard-library/toolchain vulnerability, a module vulnerability, or a scanner/tool failure. Confirm affected and fixed versions against the official advisory and release notes.
+2. Sync `main`, then create a branch named `fix/security-<component>-<fixed-version>`, for example `fix/security-go-1.27.4`.
+3. Make the targeted update. For a Go toolchain fix, update `go.mod` and the source-build prerequisite in `README.md`; CI and release compilation both read the version from `go.mod`. For a module fix, update the affected dependency and resulting module metadata.
+4. Run the [local checks](#local-checks), the vulnerability scan above, and the [Markdown checks](#markdown-checks). Resolve remaining findings and confirm the configured platform checks pass in CI.
+5. Open a PR with the advisory IDs and links, failed workflow run, affected and fixed versions, and validation results. Use a `fix(security): ...` PR and squash title for fixes affecting shipped binaries, for example `fix(security): upgrade Go to 1.27.4`, so Release Please includes the fix in a patch release. Wait for all required checks before squash merging.
+6. Review and merge the generated [Release Please PR](#releases) to rebuild and publish binaries with the fix. Verify release assets, installation and version output, and vulnerability scan status. Merging the security PR alone does not update published binaries.
 
 ## Markdown checks
 
