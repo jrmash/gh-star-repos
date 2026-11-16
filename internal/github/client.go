@@ -236,9 +236,13 @@ func (c *Client) request(ctx context.Context, query string, variables map[string
 			apiErr.Fatal = true
 		}
 		apiErr.Retryable = apiErr.Retryable || apiErr.RateLimited || status == 408 || status >= 500
-		if status == 0 && commandErr != nil {
+		if commandErr != nil && len(response.Errors) == 0 && (status == 0 || status >= 200 && status < 300) {
+			// gh can fail while reading a body after printing successful headers.
+			// It also prints GraphQL errors to stderr, so a structured error's
+			// classification must take precedence over transport keywords.
+			transportMessage := strings.ToLower(commandErr.Error())
 			for _, hint := range []string{"timeout", "connection reset", "connection refused", "unexpected eof", "no such host", "temporary failure", "tls handshake"} {
-				apiErr.Retryable = apiErr.Retryable || strings.Contains(lower, hint)
+				apiErr.Retryable = apiErr.Retryable || strings.Contains(transportMessage, hint)
 			}
 		}
 		return apiErr

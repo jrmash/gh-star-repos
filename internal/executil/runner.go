@@ -45,6 +45,7 @@ func (ProcessRunner) Run(ctx context.Context, name string, args ...string) (stri
 		return "", fmt.Errorf("find %s: %w", name, err)
 	}
 	cmd := exec.CommandContext(ctx, executable, args...)
+	configureCancellation(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	cmd.Env = commandEnv(os.Environ())
 	var stdout, stderr bytes.Buffer
