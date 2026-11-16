@@ -2,6 +2,8 @@ package github_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +44,7 @@ func TestTruncatedResponseIsRetried(t *testing.T) {
 	a, clock := testutil.NewAPI(1), &clock{}
 	a.Fail = func(_ context.Context, call testutil.Call) (string, error, bool) {
 		if a.Count(call.Operation) == 1 {
-			return "HTTP/2.0 200 OK\n\n{\"data\":", nil, true
+			return "HTTP/2.0 200 OK\n\n{\"data\":", errors.New("gh: unexpected EOF"), true
 		}
 		return "", nil, false
 	}
@@ -135,5 +137,30 @@ func TestFailedReconciliationDoesNotRepeatListCreation(t *testing.T) {
 	_, err := client(a, &clock{}).CreateList(context.Background(), "Go", true)
 	if err == nil || !strings.Contains(err.Error(), "reconcile list creation") || !github.Fatal(err) || a.Count("CreateList") != 1 || a.Count("GetLists") != 1 {
 		t.Fatalf("reconciliation failure repeated non-idempotent creation: %v, calls=%v", err, a.Calls)
+	}
+}
+
+func TestResponseReadFailuresAfterHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, message string
+		status, calls       int
+	}{
+		{"unexpected EOF", `{"data":`, "unexpected EOF", 200, 4},
+		{"reset with partial message", `{"message":"partial"}`, "read: connection reset by peer", 200, 4},
+		{"timeout", "", "read: timeout", 200, 4},
+		{"permanent command error", "", "permission denied", 200, 1},
+		{"unauthorized", "", "unexpected EOF", 401, 1},
+		{"forbidden", "", "unexpected EOF", 403, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := testutil.NewAPI(0)
+			a.Fail = func(context.Context, testutil.Call) (string, error, bool) {
+				return fmt.Sprintf("HTTP/2.0 %d Status\n\n%s", tc.status, tc.body), errors.New(tc.message), true
+			}
+			err := client(a, &clock{}).Do(context.Background(), "query GetViewer { viewer { login } }", nil, &struct{}{}, false, nil)
+			if err == nil || len(a.Calls) != tc.calls {
+				t.Fatalf("err=%v calls=%d want=%d", err, len(a.Calls), tc.calls)
+			}
+		})
 	}
 }
