@@ -130,7 +130,7 @@ To install a specific version after that tag has been published:
 <!-- x-release-please-start-version -->
 
 ```sh
-gh extension install jrmash/gh-star-repos --pin v1.0.0
+gh extension install jrmash/gh-star-repos --pin v1.0.1
 gh star-repos --version
 ```
 
